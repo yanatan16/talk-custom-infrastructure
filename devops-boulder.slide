@@ -1,0 +1,307 @@
+Building a Custom Infrastructure
+DevOps Boulder
+17 Nov 2014
+Tags: infrastructure, devops, boulder, rafflecopter, linode, saltstack, nginx, dotcloud
+
+Jon Eisen
+Code Typist, Rafflecopter
+jon@joneisen.me
+http://joneisen.me/
+@jm_eisen
+
+* Rafflecopter
+
+  Rafflecopter is the world's easiest way to run a giveaway.
+
+- Company founded in 2010, bootstrapped
+- First commit to Rafflecopter in March, 2011
+- Paid plans launched November, 2012
+- Enterprise plans launch(ed?) November, 2014
+
+We have 4 developers and 3 business and marketing team members.
+We have ~15 apps on 50 servers in production.
+We have node, python, django, and clojure in production.
+
+[INSERT OBLIGATORY HIRING MUMBOJUMBO]
+
+
+############# Choice #################
+* Making a Choice
+
+.image img/tyson-inquisitive.jpg 500 _
+
+* A Priori Knowledge
+
+1. Rafflecopter uses Dotcloud
+2. Dotcloud becomes Docker
+3. Rafflecopter moves to custom infrastructure
+
+95% of this talk is regarding number 3.
+
+* Alternatives to Custom
+
+- PAAS (DotCloud, Heroku)
+- Plug 'n' Play Services (Amazon, Azure)
+- Use Open Source IAAS (CoreOS, OpenStack)
+- Pay someone and don't ask them what they'll do
+
+* Why Custom?
+
+- *Reasoning* I know what's on each box and in each config file.
+- *Visibility* I know what's going on in my system.
+- *Inspectability* I can go verify both the above.
+- *Fixibility* I can fix a problem when something goes wrong.
+
+  :%s/(know|can)/think I $1/g
+
+* What do PAAS get right?
+
+Or, what your custom infrastructure should strive for
+
+- *Modularity* Plug in tools when you need them
+- *Polylithic* Deploy multiple apps and services as easy as a single one
+- *Decoupling* Separate deploy and configuration from code
+- *Ease* OMG its so easy to deploy an app on heroku.
+
+################ Overview #############
+* High Level Planning
+
+.image img/tyson-beanbag.jpg 500 _
+
+* Configuration Management
+
+Configuration Management systems are still the de facto standard for custom infrastructures.
+
+- Chef
+- Puppet
+- Ansible
+- CFEngine
+- SaltStack
+
+We chose *SaltStack*, because of its open source community.
+
+WRONG CHOICE: Constant regression bugs, bad language design, confusing structure, poor modularity.
+
+.html img/ibm-side.html
+
+* Services
+
+Even if we're building things custom, _everything_ doesn't have to be custom.
+
+- Serviced Load Balancers (Amazon ELB, etc)
+- Hosted Databases (MongoHQ, Amazon Dynamo, etc)
+- CDNs (Fastly, CloudFlare, Amazon CloudFront, etc)
+
+And...
+
+- We eschew most live services, for similar reasons to getting rid of Dotcloud.
+- We like Hosted Databases, but are approaching low marginal returns at our scale.
+- We love CDN's and simple data storage like Amazon S3.
+
+* VPS Provider
+
+We're really just a web app with some delayed processing, so no need to self-host.
+
+- Amazon
+- Azure
+- Digital Ocean
+- Linode
+
+We chose *Linode*, due to its simplicity in pricing and organization.
+
+(And we don't want to use the many services that Amazon provides.)
+
+GOOD CHOICE: Great service, uptime, communication, and simplicity.
+
+
+########### Designing The System #############
+* Designing The System
+
+.image img/tyson-adorbs.jpg 500 _
+
+* First Iteration
+
+- "Core" states are shared on all machines
+- All apps and databases have their own configuration
+- CLI to deploy, scale, and monitor the system
+
+And...
+
+- Lesson #1: This &*$# is *hard* and it takes a *long* time to do.
+- Lesson #2: Tons of repeated code after say, 3 apps (we have ~15).
+- Lesson #3: CLI's make the world go round. (GUI's if your that kind of person)
+
+
+* Second Iteration
+
+Refactored apps to share configuration code.
+Now we just handle the differences and configure each one in 20 lines or so:
+
+  bobbarker:
+    repo: Rafflecopter/bobbarker
+    rev: master
+    procs:
+      service:
+        language: node
+        main: server.js
+        config:
+          'file://%(pkgpath)s/config/template.json': 'config/%(node_env)s.json'
+        nginx:
+          cors: rafflecopter.com
+        nprocs: 2
+
+This sets up `node`, downloads the app, `npm install`, `nginx`, `supervisord`, logging and configuration.
+
+* It must be easy
+
+  Developers are lazy. If something isn't easy, developers won't do it.
+
+To make _deploying_ easy, we use a CLI.
+
+  expo boxes new prod myapp
+  expo boxes scale prod myapp --to 3
+  expo cloud ssh prod myapp --instance 2
+  expo logs tail myapp.nginx
+
+  expo deploy prod myapp # woot
+
+* It must be visible
+
+  Actions must be visible. Or else no one knows about them.
+
+We put actions that devs take in front of them so we can talk about them in the open.
+
+.image img/slack-expo.png
+
+* Dev Setups
+
+  We have ~15 apps over 20+ repos. How do you expect us to run the system?
+
+Using a pre-setup dev VM of course!
+
+We use Vagrant and the production SaltStack system to create a mini rafflecopter system on a VM.
+
+########### Load Balancing #############
+* Load Balancing
+
+.image img/tyson-bother.jpg 500 _
+
+* But Why
+
+Load Balancing, you *have* to do it!
+
+- Low/No Downtime Deploys
+- Error monitoring
+- App (re-)deployment
+- Handle unexpected failures
+
+* More Choices
+
+- LBAAS - Already kinda ruled out, we want to control our live infrastructure.
+- `nginx` - Very versatile and fast.
+- `haproxy` - Fast, but less versatile.
+
+Many comparisions point to `nginx` and `haproxy` as about equals (although it varies depending on the test)
+
+We chose `nginx` because its so versatile, we can do cool things with it.
+
+* nginx
+
+In our Load Balancers:
+
+- Route to ever changing backends
+- Handle unexpected failures
+- Sticky sessions based on IP
+- Strip HTTPS
+- [FUTURE] Use Redis to live-change backend locations
+
+On our App Servers:
+
+- Responde to Cross-Origin OPTION Requests immediately
+- Route through unix sockets
+- Host static files
+- Sticky sessions based on IP
+
+* A simple load balancer
+
+Strip SSL
+
+.code -numbers code/load-balancer.conf
+
+* A simple load balancer enhanced
+
+Host Static Files
+
+.code -numbers code/load-balancer-2.conf
+
+* A simple load balancer ENHANCED
+
+Serve a websocket
+
+.code -numbers code/load-balancer-3.conf
+
+* A simple load balancer MEGAENHANCED
+
+Add statsd monitoring
+
+.code -numbers code/load-balancer-4.conf
+
+############ Migration ##########
+* Migration
+
+.image img/tyson-trail.jpg 500 _
+
+* Some Suggestions
+
+.html img/you-know-nothing.html
+
+- You change nothing Jon Snow.
+There is enough going on by moving an app from A to B without making logic changes.
+Changes _will_ need to be made to support a different ecosystem, but limit them as much as possible.
+
+- Monitor _Everything_
+Monitor BOTH Apps, you never know where things are going wrong
+Logs, Stats, Load Balancers, Errors, Customer Reactions
+
+- Fallback plans
+Be prepared to roll back.
+But don't do it too soon. Know what the breaking point is when shit hits the fan.
+
+* Different Apps, Different Challenges
+
+- Be Stateless!
+Stateless apps are *orders*of*magnitude*easier* to migrate.
+
+- Work Queues
+Use different work queues in different infrastructures. Using the same one can be confusing and slow.
+
+- Customer-facing DNS
+Use proxying on the old site to point to the new one during DNS iffyness. (remember `proxy_pass`?)
+
+- Database Migration
+You're on your own. Database-specific challenges here.
+
+############ Wrapup ###########
+* Wrapup
+
+.image img/tyson-sleeping.jpg 500 _
+
+* Wrapup
+
+- Rafflecopter didn't like its PAAS situation
+- I built a custom infrastructure on Linode to solve that problem
+- We built custom tooling in SaltStack and a CLI to make it easy and reliable
+- We use `nginx` as a load balancer
+- I gave you some advice from the trenches on app migrations
+
+* Thanks
+
+This talk
+
+.link https://github.com/yanatan16/talk-custom-infrastructure
+
+Original Blog Posts
+
+.link http://make.rafflecopter.com
+
+.html img/doge.html
