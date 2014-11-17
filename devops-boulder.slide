@@ -8,6 +8,7 @@ Code Typist, Rafflecopter
 jon@joneisen.me
 http://joneisen.me/
 @jm_eisen
+Images ©Tyson Eisen
 
 * Rafflecopter
 
@@ -181,6 +182,16 @@ Using a pre-setup dev VM of course!
 
 We use Vagrant and the production SaltStack system to create a mini rafflecopter system on a VM.
 
+.image img/tyson-sweater.jpg 300 _
+
+* Simple Salt State
+
+.code code/salt-clojure.sls
+
+* Salt State with Templating
+
+.code code/salt-hosts.sls
+
 ########### Load Balancing #############
 * Load Balancing
 
@@ -194,6 +205,8 @@ Load Balancing, you *have* to do it!
 - Error monitoring
 - App (re-)deployment
 - Handle unexpected failures
+
+.html img/tyson-eyes.html
 
 * More Choices
 
@@ -293,6 +306,10 @@ You're on your own. Database-specific challenges here.
 - We built custom tooling in SaltStack and a CLI to make it easy and reliable
 - We use `nginx` as a load balancer
 - I gave you some advice from the trenches on app migrations
+
+* The End
+
+.image img/tyson.jpg 500 _
 
 * Thanks
 
