@@ -307,9 +307,16 @@ You're on your own. Database-specific challenges here.
 - We use `nginx` as a load balancer
 - I gave you some advice from the trenches on app migrations
 
-* The End
+* The Future
 
-.image img/tyson.jpg 500 _
+  If you don't hate a tool, you've never used it.
+
+- Now that its in place, I want to tear it apart.
+- CoreOS?
+- Apache Mesos?
+- Google Kubernetes?
+
+.html img/tyson-tyson.html
 
 * Thanks
 
